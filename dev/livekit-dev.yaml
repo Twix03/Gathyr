@@ -1,0 +1,22 @@
+# LiveKit Dev Config — separate from production
+# Runs on port 7882 so it doesn't conflict with prod (:7880)
+
+port: 7882
+
+rtc:
+  tcp_port: 7883
+  port_range_start: 50100
+  port_range_end: 51000
+
+development: true
+
+# Dev keys — matches Backend dev .env
+keys:
+  devkey: secret
+
+logging:
+  level: info
+  json: false
+
+turn:
+  enabled: false
