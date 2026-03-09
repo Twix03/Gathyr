@@ -1,0 +1,23 @@
+gathyr.app {
+    # Serve built frontend static files
+    root * /Users/sathwik/Desktop/gathyr/Frontend/dist
+    file_server
+
+    # WebSocket passthrough to FastAPI
+    handle /ws/* {
+        reverse_proxy localhost:8000
+    }
+
+    # API passthrough to FastAPI
+    handle /api/* {
+        reverse_proxy localhost:8000
+    }
+
+    # SPA fallback — all unknown routes go to index.html (React Router)
+    try_files {path} /index.html
+}
+
+# LiveKit media server — needs its own subdomain for WebRTC to work
+livekit.gathyr.app {
+    reverse_proxy localhost:7880
+}

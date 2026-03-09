@@ -1,0 +1,31 @@
+# LiveKit Server Production Configuration
+# Used instead of --dev flag for production
+
+port: 7880
+
+# RTC configuration for WebRTC
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  # Your public IP — update this if your IP changes (or rely on DDNS)
+  node_ip: ""  # Leave empty to auto-detect, or set to your public IP
+
+# Disable dev mode
+development: false
+
+# Keys — MUST match your Backend/.env LIVEKIT_API_KEY and LIVEKIT_API_SECRET
+keys:
+  # Format: api_key: api_secret
+  # Replace these with strong values (keep in sync with deploy/.env.production)
+  gathyr_key: ff6aea8cd6c8f926eb5e7d5a99e1a3fa208e8690e2743d672eeb2b96a0152701
+
+# Logging
+logging:
+  level: info
+  json: false
+
+# TURN disabled — using Cloudflare Tunnel for transport.
+# LiveKit will fall back to WebSocket-based media when direct UDP is unavailable.
+turn:
+  enabled: false

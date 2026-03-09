@@ -1,0 +1,24 @@
+tunnel: 2a71f805-c6c9-4877-a9ff-33c58973e399
+credentials-file: /Users/sathwik/.cloudflared/2a71f805-c6c9-4877-a9ff-33c58973e399.json
+
+ingress:
+  # LiveKit media server — separate subdomain
+  - hostname: livekit.gathyr.app
+    service: http://localhost:7880
+
+  # Backend WebSocket routes
+  - hostname: gathyr.app
+    path: /ws/.*
+    service: http://localhost:8000
+
+  # Backend API routes
+  - hostname: gathyr.app
+    path: /api/.*
+    service: http://localhost:8000
+
+  # Frontend static files (everything else)
+  - hostname: gathyr.app
+    service: http://localhost:3000
+
+  # Required catch-all
+  - service: http_status:404
