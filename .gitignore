@@ -3,6 +3,8 @@
 node_modules/
 dist/
 build/
+.npm-cache/
+.pnpm-store/
 .env
 .env.local
 .env.production
