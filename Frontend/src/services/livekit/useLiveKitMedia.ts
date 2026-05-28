@@ -92,6 +92,10 @@ export function useLiveKitMedia() {
       updateParticipant(participant);
     };
 
+    const handleTrackPublished = (pub: TrackPublication, participant: RemoteParticipant) => {
+      updateParticipant(participant);
+    };
+
     const handleLocalTrackPublished = (pub: TrackPublication) => {
       console.log("Local track published:", pub.kind);
       updateParticipant(room.localParticipant);
@@ -150,6 +154,7 @@ export function useLiveKitMedia() {
     room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
     room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
     room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+    room.on(RoomEvent.TrackPublished, handleTrackPublished);
     room.on(RoomEvent.TrackMuted, handleTrackMuted);
     room.on(RoomEvent.TrackUnmuted, handleTrackUnmuted);
     room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakersChanged);
@@ -178,6 +183,7 @@ export function useLiveKitMedia() {
       room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
       room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
       room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      room.off(RoomEvent.TrackPublished, handleTrackPublished);
       room.off(RoomEvent.TrackMuted, handleTrackMuted);
       room.off(RoomEvent.TrackUnmuted, handleTrackUnmuted);
       room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakersChanged);

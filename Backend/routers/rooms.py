@@ -144,3 +144,31 @@ async def leave_room(room_code: str, participant_id: str) -> None:
         }
     )
 
+import os
+from datetime import datetime
+from ..models.schemas import FeedbackSubmission
+
+@router.post("/suggestions", status_code=status.HTTP_201_CREATED)
+async def submit_suggestion(request: FeedbackSubmission) -> dict:
+    """Submit a bug report or suggestion. Appends to suggestions.txt."""
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        entry = f"[{timestamp}] TYPE: {request.type.upper()} | ROOM: {request.room_code or 'N/A'} | USER: {request.user_id or 'N/A'}\n"
+        entry += f"TEXT: {request.text}\n"
+        entry += "-" * 50 + "\n"
+        
+        # Append to a file in the project root
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        file_path = os.path.join(project_root, "suggestions.txt")
+        
+        with open(file_path, "a", encoding="utf-8") as f:
+            f.write(entry)
+            
+        return {"status": "success", "message": "Feedback submitted successfully."}
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to submit feedback: {str(e)}"
+        )

@@ -1,23 +1,26 @@
-gathyr.app {
-    # Serve built frontend static files
-    root * /Users/sathwik/Desktop/gathyr/Frontend/dist
-    file_server
+## gathyr.app is proxied through Cloudflare (orange cloud, Flexible SSL).
+## Caddy listens on HTTP only — Cloudflare handles HTTPS for visitors.
+gathyr.app:80 {
+	# WebSocket passthrough to FastAPI
+	handle /ws/* {
+		reverse_proxy localhost:8000
+	}
 
-    # WebSocket passthrough to FastAPI
-    handle /ws/* {
-        reverse_proxy localhost:8000
-    }
+	# API passthrough to FastAPI
+	handle /api/* {
+		reverse_proxy localhost:8000
+	}
 
-    # API passthrough to FastAPI
-    handle /api/* {
-        reverse_proxy localhost:8000
-    }
-
-    # SPA fallback — all unknown routes go to index.html (React Router)
-    try_files {path} /index.html
+	# Frontend static files — catch-all (must be last)
+	handle {
+		root * /services/Gathyr/Frontend/dist
+		try_files {path} /index.html
+		file_server
+	}
 }
 
-# LiveKit media server — needs its own subdomain for WebRTC to work
+## livekit.gathyr.app is DNS-only (grey cloud) — direct connection.
+## Caddy handles TLS via Let's Encrypt here.
 livekit.gathyr.app {
-    reverse_proxy localhost:7880
+	reverse_proxy localhost:7880
 }

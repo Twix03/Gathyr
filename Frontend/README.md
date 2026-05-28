@@ -1,7 +1,7 @@
 
-  # Design Fun Web App UI
+  # Gathyr
 
-  This is a code bundle for Design Fun Web App UI. The original project is available at https://www.figma.com/design/rVKCh1qf56crirBpwi0wNo/Design-Fun-Web-App-UI.
+  This is a code bundle for Gathyr. The original project is available at https://www.figma.com/design/rVKCh1qf56crirBpwi0wNo/Design-Fun-Web-App-UI.
 
   ## Running the code
 

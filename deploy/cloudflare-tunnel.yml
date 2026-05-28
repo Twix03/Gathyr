@@ -1,5 +1,5 @@
 tunnel: 2a71f805-c6c9-4877-a9ff-33c58973e399
-credentials-file: /Users/sathwik/.cloudflared/2a71f805-c6c9-4877-a9ff-33c58973e399.json
+credentials-file: /home/ubuntu/.cloudflared/2a71f805-c6c9-4877-a9ff-33c58973e399.json
 
 ingress:
   # LiveKit media server — separate subdomain

@@ -81,6 +81,16 @@ export const GAME_MESSAGES = {
     category: 'game' as const,
     direction: 'client_to_server' as const,
   },
+  GAME_ACTION: {
+    type: 'game_action',
+    category: 'game' as const,
+    direction: 'client_to_server' as const,
+  },
+  GAME_EVENT: {
+    type: 'game_event',
+    category: 'game' as const,
+    direction: 'server_to_client' as const,
+  },
   TIMER_STARTED: {
     type: 'timer_started',
     category: 'game' as const,

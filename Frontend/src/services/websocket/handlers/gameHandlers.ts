@@ -8,12 +8,13 @@ import type { WebSocketMessage } from '../websocket';
 interface GameHandlersConfig {
   setRoom: (room: Room | null | ((prev: Room | null) => Room | null)) => void;
   onGameStateUpdate?: (gameId: string, state: any) => void;
+  onGameEvent?: (event: any) => void;
 }
 
 /**
  * Hook to register all game-related WebSocket handlers
  */
-export function useGameHandlers({ setRoom, onGameStateUpdate }: GameHandlersConfig) {
+export function useGameHandlers({ setRoom, onGameStateUpdate, onGameEvent }: GameHandlersConfig) {
   useEffect(() => {
     // Game started handler
     const unsubGameStarted = websocketService.on('game_started', (message: WebSocketMessage) => {
@@ -56,16 +57,22 @@ export function useGameHandlers({ setRoom, onGameStateUpdate }: GameHandlersConf
       }
     });
 
+    // Game event handler
+    const unsubGameEvent = websocketService.on('game_event', (message: WebSocketMessage) => {
+      console.log('Game event', message.data);
+      if (onGameEvent && message.data) {
+        onGameEvent(message.data);
+      }
+    });
+
     // Timer started handler
     const unsubTimerStarted = websocketService.on('timer_started', (message: WebSocketMessage) => {
       console.log('Timer started', message.data);
-      // Handle timer start if needed
     });
 
     // Timer ended handler
     const unsubTimerEnded = websocketService.on('timer_ended', (message: WebSocketMessage) => {
       console.log('Timer ended', message.data);
-      // Handle timer end if needed
     });
 
     // Cleanup function
@@ -73,8 +80,9 @@ export function useGameHandlers({ setRoom, onGameStateUpdate }: GameHandlersConf
       unsubGameStarted();
       unsubGameEnded();
       unsubGameStateUpdated();
+      unsubGameEvent();
       unsubTimerStarted();
       unsubTimerEnded();
     };
-  }, [setRoom, onGameStateUpdate]);
+  }, [setRoom, onGameStateUpdate, onGameEvent]);
 }

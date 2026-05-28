@@ -24,4 +24,5 @@ export interface Room {
   currentGame: string | null;
   lastPlayed: string | null;
   proposal: GameProposal | null;
+  gameState?: any;
 }

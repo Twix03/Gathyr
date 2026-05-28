@@ -125,7 +125,7 @@ export default function TriviaGame({ participants, currentUser }: TriviaGameProp
   );
 
   return (
-    <div className="h-full flex items-center justify-center p-6 bg-gradient-to-br from-purple-900/10 to-teal-900/10">
+    <div className="h-full flex items-center justify-center">
       <div className="max-w-4xl w-full">
         <div className="flex gap-6">
           {/* Question Area */}

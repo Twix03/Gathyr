@@ -1,0 +1,15 @@
+[Unit]
+Description=Gathyr LiveKit Server
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart=/usr/local/bin/livekit-server --config /services/Gathyr/deploy/livekit.yaml
+Restart=always
+RestartSec=5
+StandardOutput=append:/services/Gathyr/deploy/livekit.log
+StandardError=append:/services/Gathyr/deploy/livekit.log
+
+[Install]
+WantedBy=multi-user.target

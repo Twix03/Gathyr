@@ -30,11 +30,19 @@ interface UsePiPOptions {
 
 export function usePiP({ enabled, width = 420, height = 360 }: UsePiPOptions) {
     const pipWindowRef = useRef<Window | null>(null);
+    const enabledRef = useRef(enabled);
     const [isPiPOpen, setIsPiPOpen] = useState(false);
     const [isPiPSupported] = useState(() => 'documentPictureInPicture' in window);
 
+    // Keep the enabled ref perfectly in sync with the prop
+    useEffect(() => {
+        enabledRef.current = enabled;
+    }, [enabled]);
+
     const openPiP = useCallback(async () => {
-        if (!enabled || !isPiPSupported) return;
+        // Use the ref, not the prop, to avoid stale closures in event listeners
+        if (!enabledRef.current || !isPiPSupported) return;
+
         // Already open
         if (pipWindowRef.current && !pipWindowRef.current.closed) return;
 
@@ -69,7 +77,7 @@ export function usePiP({ enabled, width = 420, height = 360 }: UsePiPOptions) {
         } catch (e) {
             console.warn('Could not open Picture-in-Picture window:', e);
         }
-    }, [enabled, isPiPSupported, width, height]);
+    }, [isPiPSupported, width, height]);
 
     const closePiP = useCallback(() => {
         if (pipWindowRef.current && !pipWindowRef.current.closed) {

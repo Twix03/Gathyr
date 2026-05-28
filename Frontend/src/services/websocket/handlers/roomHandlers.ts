@@ -44,6 +44,7 @@ export function useRoomHandlers({ setRoom, setUser, currentUserId }: RoomHandler
         currentGame: room.current_game ?? null,
         lastPlayed: room.last_played ?? null,
         proposal: room.proposal ?? null,
+        gameState: message.data?.game_state ?? null,
       });
     });
 

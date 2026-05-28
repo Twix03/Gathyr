@@ -40,7 +40,7 @@ export default function ParticipantDropdown({
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-[#1a1625] border border-white/10 shadow-2xl z-50 overflow-hidden"
+              className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-[#1a1625] border border-white/10 shadow-2xl z-[100] overflow-hidden"
             >
               <div className="p-3 border-b border-white/10">
                 <h3 className="text-sm font-medium">Participants</h3>
@@ -84,11 +84,10 @@ export default function ParticipantDropdown({
 
                         <button
                           onClick={() => onToggleVisibility(participant.id)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            isVisible
-                              ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
-                              : 'bg-white/5 text-gray-400 hover:bg-white/10'
-                          }`}
+                          className={`p-1.5 rounded-lg transition-colors ${isVisible
+                            ? 'bg-purple-500/20 text-purple-400 hover:bg-purple-500/30'
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                            }`}
                           title={isVisible ? 'Hide video' : 'Show video'}
                         >
                           {isVisible ? (

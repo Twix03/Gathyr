@@ -1,11 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Resizable } from 're-resizable';
-import { Mic, MicOff, Video, VideoOff, X, Volume2, VolumeX } from 'lucide-react';
 import { Participant } from '../types/Room';
-// import { MediaParticipant } from "../services/useLiveKitMedia";
-// import { useLiveKitControls } from "../services/useLiveKitControls";
 import { MediaParticipant, useLiveKitControls } from "../services/livekit";
-import { useLocalPreferences } from "../services/LocalPreferencesContext";
+import { VideoTile, VideoTileData } from "./VideoTile";
 
 export interface ParticipantState {
   id: string; // identity
@@ -55,6 +52,7 @@ interface FloatingVideoGridProps {
   onUpdateParticipantState: (id: string, updates: Partial<ParticipantState>) => void;
   hiddenParticipantIdentities: Set<string>;
   onHideParticipant: (identity: string) => void;
+  isReadOnly?: boolean;
 }
 
 interface DraggableVideoCardProps {
@@ -66,41 +64,21 @@ interface DraggableVideoCardProps {
   controls: {
     toggleMute: (id: string, isLocal: boolean) => void;
     toggleVideo: (id: string, isLocal: boolean) => void;
-  }
+  };
+  isReadOnly?: boolean;
 }
 
 
 
-const DraggableVideoCard = ({ participant, currentUser, state, onUpdateState, onHide, controls }: DraggableVideoCardProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const { isLocallyMuted, toggleLocalMute } = useLocalPreferences();
+const DraggableVideoCard = ({ participant, currentUser, state, onUpdateState, onHide, controls, isReadOnly }: DraggableVideoCardProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const locallyMuted = isLocallyMuted(participant.identity);
-
-  useEffect(() => {
-    const videoEl = videoRef.current;
-    if (!videoEl || !participant.videoTrack) return;
-    participant.videoTrack.attach(videoEl);
-    return () => {
-      participant.videoTrack?.detach(videoEl);
-    };
-  }, [participant.videoTrack]);
-
-  useEffect(() => {
-    const audioEl = audioRef.current;
-    // Never attach/play local participant's audio — prevents hearing yourself
-    if (!audioEl || !participant.audioTrack || participant.isLocal) return;
-    participant.audioTrack.attach(audioEl);
-    audioEl.play().catch(e => console.error("Audio play failed", e));
-    return () => {
-      participant.audioTrack?.detach(audioEl);
-    };
-  }, [participant.audioTrack, participant.isLocal]);
-
-  // Determine actual media state
-  const isAudioEnabled = participant.audioTrack ? !participant.audioTrack.isMuted : false;
-  const isVideoEnabled = participant.videoTrack ? !participant.videoTrack.isMuted : false;
+  const tile: VideoTileData = {
+    id: `${participant.identity}-camera-floating`,
+    participant,
+    type: 'camera',
+    track: participant.videoTrack,
+  };
 
   return (
     <Resizable
@@ -118,8 +96,13 @@ const DraggableVideoCard = ({ participant, currentUser, state, onUpdateState, on
       style={{ position: "fixed", left: state.position.x, top: state.position.y, zIndex: 1000 }}
     >
       <div
-        className="relative w-full h-full group rounded-lg overflow-hidden shadow-lg border border-white/10 bg-black/80"
-        onMouseDown={(e) => {
+        ref={containerRef}
+        className="relative w-full h-full group pointer-events-auto"
+        onMouseDown={isReadOnly ? undefined : (e) => {
+          // Don't start a drag when interacting with buttons/controls
+          if ((e.target as HTMLElement).closest('button')) {
+            return;
+          }
           const startX = e.clientX - state.position.x;
           const startY = e.clientY - state.position.y;
           // Use ownerDocument so dragging works in both the main window and PiP window
@@ -142,92 +125,50 @@ const DraggableVideoCard = ({ participant, currentUser, state, onUpdateState, on
           targetDoc.addEventListener('mousemove', handleMouseMove);
           targetDoc.addEventListener('mouseup', handleMouseUp);
         }}
+        onTouchStart={isReadOnly ? undefined : (e) => {
+          // Don't start a drag when interacting with buttons/controls
+          if ((e.target as HTMLElement).closest('button')) {
+            return;
+          }
+          const touch = e.touches[0];
+          const startX = touch.clientX - state.position.x;
+          const startY = touch.clientY - state.position.y;
+          const targetDoc = (e.currentTarget as HTMLElement).ownerDocument;
+
+          const handleTouchMove = (moveEvent: TouchEvent) => {
+            moveEvent.preventDefault();
+            const touch = moveEvent.touches[0];
+            onUpdateState(participant.identity, {
+              position: {
+                x: touch.clientX - startX,
+                y: touch.clientY - startY,
+              },
+            });
+          };
+
+          const handleTouchEnd = () => {
+            targetDoc.removeEventListener('touchmove', handleTouchMove);
+            targetDoc.removeEventListener('touchend', handleTouchEnd);
+          };
+
+          targetDoc.addEventListener('touchmove', handleTouchMove, { passive: false });
+          targetDoc.addEventListener('touchend', handleTouchEnd);
+        }}
       >
-        {/* Video Layer */}
-        <div className="w-full h-full relative bg-zinc-900">
-          {isVideoEnabled ? (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted={participant.identity === currentUser.id}
-              className="w-full h-full object-cover pointer-events-none"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-900/30 to-teal-900/30">
-              <div className="w-[35%] max-w-[120px] aspect-square rounded-full bg-gradient-to-br from-purple-500 to-teal-500 flex items-center justify-center">
-                <span className="text-4xl text-white">
-                  {participant.name.charAt(0).toUpperCase()}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Audio Element - hidden but functional */}
-        <audio ref={audioRef} autoPlay muted={participant.isLocal || locallyMuted} />
-
-        {/* Overlay Controls (Visible on Hover) */}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
-
-          {/* Top Right: Hide Button */}
-          <div className="flex justify-end">
-            <button
-              onClick={(e) => { e.stopPropagation(); onHide(participant.identity); }}
-              className="p-1.5 rounded-full bg-red-500/80 hover:bg-red-500 text-white transition-colors"
-              title="Hide for me"
-            >
-              <X size={14} />
-            </button>
-          </div>
-
-          {/* Bottom Controls */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-white font-medium truncate flex-1 shadow-black drop-shadow-md">
-              {participant.name || participant.identity} {participant.isLocal ? "(You)" : ""}
-            </span>
-
-            {/* Sound Button (Remote Only) */}
-            {!participant.isLocal && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleLocalMute(participant.identity);
-                }}
-                className={`p-1.5 rounded-full backdrop-blur-sm transition-colors ${!locallyMuted ? 'bg-white/20 hover:bg-white/40 text-white' : 'bg-red-500/80 hover:bg-red-500 text-white'}`}
-                title={locallyMuted ? "Unmute Sound" : "Mute Sound (For Me)"}
-              >
-                {locallyMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              </button>
-            )}
-
-            {/* Global Mute / Video Toggle */}
-            <button
-              onClick={(e) => { e.stopPropagation(); controls.toggleMute(participant.identity, participant.isLocal); }}
-              className={`p-1.5 rounded-full backdrop-blur-sm transition-colors ${isAudioEnabled ? 'bg-white/20 hover:bg-white/40 text-white' : 'bg-red-500/80 hover:bg-red-500 text-white'}`}
-              title={participant.isLocal ? (isAudioEnabled ? "Mute Mic" : "Unmute Mic") : (isAudioEnabled ? "Mute Participant" : "Participant Muted")}
-            >
-              {isAudioEnabled ? <Mic size={14} /> : <MicOff size={14} />}
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (participant.isLocal) {
-                  controls.toggleVideo(participant.identity, participant.isLocal);
-                }
-              }}
-              disabled={!participant.isLocal}
-              className={`p-1.5 rounded-full backdrop-blur-sm transition-colors 
-                 ${!participant.isLocal
-                  ? 'bg-white/5 text-white/50 cursor-not-allowed'
-                  : (isVideoEnabled ? 'bg-white/20 hover:bg-white/40 text-white' : 'bg-red-500/80 hover:bg-red-500 text-white')
-                }`}
-              title={participant.isLocal ? "Toggle Video" : "Video Control Blocked"}
-            >
-              {isVideoEnabled ? <Video size={14} /> : <VideoOff size={14} />}
-            </button>
-          </div>
-        </div>
+        {/* Floating Video Tile using shared VideoTile component */}
+        <VideoTile
+          tile={tile}
+          controls={{
+            toggleMute: controls.toggleMute,
+            toggleVideo: controls.toggleVideo,
+            toggleScreenShare: () => { },
+          }}
+          className="w-full h-full"
+          isDraggable={false}
+          parentRef={containerRef}
+          hideScreenShareButton
+          onHide={!isReadOnly ? () => onHide(participant.identity) : undefined}
+        />
       </div>
     </Resizable>
   );
@@ -239,7 +180,8 @@ export default function FloatingVideoGrid({
   participantStates,
   onUpdateParticipantState,
   hiddenParticipantIdentities,
-  onHideParticipant
+  onHideParticipant,
+  isReadOnly
 }: FloatingVideoGridProps) {
   const { toggleMute, toggleVideo } = useLiveKitControls();
 
@@ -261,6 +203,7 @@ export default function FloatingVideoGrid({
             onUpdateState={onUpdateParticipantState}
             onHide={onHideParticipant}
             controls={{ toggleMute, toggleVideo }}
+            isReadOnly={isReadOnly}
           />
         );
       })}

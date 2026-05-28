@@ -266,6 +266,19 @@ class WebSocketService {
   }
 
   /**
+   * Send a game action
+   */
+  sendGameAction(action: string, payload: any): void {
+    this.send({
+      type: 'game_action',
+      data: {
+        action,
+        payload,
+      },
+    });
+  }
+
+  /**
    * Check if WebSocket is connected
    */
   isConnected(): boolean {

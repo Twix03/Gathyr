@@ -4,7 +4,7 @@ import RoomPage from '../components/RoomPage';
 import { websocketService, useRoomHandlers, useGameHandlers, useProposalHandlers } from '../services/websocket';
 import { apiService } from '../services/api';
 import { Room, Participant } from '../types/Room';
-import { Room as LiveKitRoom } from "livekit-client";
+import { Room as LiveKitRoom, RoomOptions, VideoPresets } from "livekit-client";
 import { config } from '../services/config'
 import { LiveKitRoomContext } from "../services/livekit";
 import { LocalPreferencesProvider } from '../services/LocalPreferencesContext';
@@ -16,10 +16,7 @@ function RoomRoute() {
   const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
   const [currentUser, setCurrentUser] = useState<Participant | null>(null);
   const mediaRoomRef = useRef<LiveKitRoom | null>(null);
-  // Token stored in a ref so it persists across re-renders, whether from
-  // initial navigation state or from an auto-rejoin on page refresh.
   const lkTokenRef = useRef<string | null>(
-    // Try to read from router navigation state (normal join flow)
     (window.history.state?.usr?.token as string | undefined) ?? null
   );
 
@@ -38,7 +35,23 @@ function RoomRoute() {
       }
 
       if (!mediaRoomRef.current) {
-        mediaRoomRef.current = new LiveKitRoom();
+        const roomOptions: RoomOptions = {
+          videoCaptureDefaults: {
+            resolution: VideoPresets.h720.resolution,
+          },
+          publishDefaults: {
+            videoCodec: "vp9",
+            simulcast: true,
+            screenShareEncoding: {
+              maxBitrate: 3_000_000,
+              maxFramerate: 30,
+              priority: "high",
+            },
+          },
+          adaptiveStream: false,
+          dynacast: true,
+        };
+        mediaRoomRef.current = new LiveKitRoom(roomOptions);
       }
 
       websocketService.connect(roomCode, currentUser.id);
@@ -96,6 +109,10 @@ function RoomRoute() {
   // Register game-related handlers
   useGameHandlers({
     setRoom: setCurrentRoom,
+    onGameEvent: (event) => {
+      // Game events are handled by individual game components
+      console.log('Game event received in RoomRoute:', event);
+    },
   });
 
   // Register proposal-related handlers

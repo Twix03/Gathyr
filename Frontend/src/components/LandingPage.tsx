@@ -196,7 +196,7 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }: LandingPagePro
       </div>
 
       {/* Create Room Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      {/* <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="bg-[#1a1625] border-white/10">
           <DialogHeader>
             <DialogTitle>Create a Room</DialogTitle>
@@ -214,6 +214,37 @@ export default function LandingPage({ onCreateRoom, onJoinRoom }: LandingPagePro
               onClick={handleCreate}
               disabled={!userName.trim()}
               className="w-full bg-gradient-to-r from-purple-500 to-teal-500 hover:from-purple-600 hover:to-teal-600"
+            >
+              Create Room
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog> */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="bg-[#1a1625] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              Create a Room
+            </DialogTitle>
+
+            <DialogDescription className="text-gray-300">
+              Enter your name to get started
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            <Input
+              placeholder="Your name"
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              className="bg-white/5 border-white/10 text-white placeholder:text-gray-400"
+            />
+
+            <Button
+              onClick={handleCreate}
+              disabled={!userName.trim()}
+              className="w-full bg-gradient-to-r from-purple-500 to-teal-500 hover:from-purple-600 hover:to-teal-600 text-white"
             >
               Create Room
             </Button>

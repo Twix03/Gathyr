@@ -92,3 +92,12 @@ class ParticipantUpdate(BaseModel):
     is_speaking: Optional[bool] = None
     video_enabled: Optional[bool] = None
 
+
+class FeedbackSubmission(BaseModel):
+    """Feedback submission schema."""
+    type: str = Field(..., description="bug or suggestion")
+    text: str = Field(..., min_length=1)
+    user_id: Optional[str] = None
+    room_code: Optional[str] = None
+
+

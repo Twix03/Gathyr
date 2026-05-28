@@ -12,34 +12,48 @@ WORDS = [
 class ScribbleGame(Game):
     def __init__(self, room_code: str):
         super().__init__(room_code)
-        self.canvas_data: List[Dict[str, Any]] = [] # List of draw events
+        self.canvas_data: List[Dict[str, Any]] = []
         self.current_word: str = ""
         self.masked_word: str = ""
         self.drawer_id: str = ""
-        self.round_duration = 60 # seconds
-        self.guessed_ids: set = set()
+        self.round_duration = 60
+        self.round_start_time: Optional[float] = None
+        self.round_end_time: Optional[float] = None
+        self.guessed_players: Dict[str, float] = {}
+        self.round_number: int = 0
         
     def start_game(self):
         super().start_game()
+        self.round_number = 0
         self.start_round()
         
     def start_round(self):
-        # 1. Select new drawer
+        self.round_number += 1
+        
+        # Select new drawer
         self.drawer_id = self.next_turn()
         if not self.drawer_id:
             self.end_game()
             return
             
-        # 2. Select word
+        # Select word
         self.current_word = random.choice(WORDS)
-        self.masked_word = "_ " * len(self.current_word)
+        self.masked_word = self._create_masked_word(self.current_word)
         
-        # 3. Reset state
+        # Reset state
         self.canvas_data = []
-        self.guessed_ids = set()
+        self.guessed_players = {}
         
-        # 4. Start timer
+        # Set round timing
+        self.round_start_time = time.time()
+        self.round_end_time = self.round_start_time + self.round_duration
+        
+        # Start timer
         self.start_timer(self.round_duration)
+    
+    def _create_masked_word(self, word: str) -> str:
+        """Create masked version of word with underscores."""
+        return " ".join("_" if c != " " else " " for c in word)
         
     def handle_event(self, event_type: str, payload: Any, player_id: str) -> Dict[str, Any]:
         if event_type == "DRAW":
@@ -48,81 +62,151 @@ class ScribbleGame(Game):
                 return {}
             
             action = payload.get("action")
-            data = payload.get("data")
             
             if action == "CLEAR":
                 self.canvas_data = []
-            else:
-                self.canvas_data.append(payload)
+                return {"type": "CANVAS_CLEAR", "payload": {}}
+            elif action == "DRAW":
+                draw_data = {
+                    "x": payload.get("x"),
+                    "y": payload.get("y"),
+                    "color": payload.get("color"),
+                    "lineWidth": payload.get("lineWidth"),
+                    "isStart": payload.get("isStart", False)
+                }
+                self.canvas_data.append(draw_data)
+                return {"type": "DRAW_UPDATE", "payload": draw_data}
                 
-            return {"type": "DRAW_UPDATE", "payload": payload}
+            return {}
             
         elif event_type == "GUESS":
             # Drawer cannot guess
             if player_id == self.drawer_id:
                 return {}
+            
+            # Check if round is still active
+            if not self.round_start_time or not self.round_end_time:
+                return {}
+                
+            # Already guessed correctly
+            if player_id in self.guessed_players:
+                return {}
                 
             guess = payload.get("guess", "").upper().strip()
             
-            if player_id in self.guessed_ids:
-                return {} # Already guessed
-                
             if guess == self.current_word:
-                self.guessed_ids.add(player_id)
+                guess_time = time.time()
+                self.guessed_players[player_id] = guess_time
                 
-                # Calculate score based on remaining time
-                # Max 100, Min 10
-                time_bonus = 0
-                if self.timer:
-                    time_bonus = int((self.timer.remaining / self.round_duration) * 50)
-                points = 50 + time_bonus
+                # Calculate score based on how fast they guessed
+                time_elapsed = guess_time - self.round_start_time
+                time_remaining = self.round_end_time - guess_time
                 
-                self.update_score(player_id, points)
-                # Drawer gets points too for good drawing
-                self.update_score(self.drawer_id, 10)
+                # Score: 50 base + up to 50 bonus for speed
+                time_ratio = max(0, time_remaining / self.round_duration)
+                time_bonus = int(time_ratio * 50)
+                guesser_points = 50 + time_bonus
+                
+                self.update_score(player_id, guesser_points)
+                
+                # Drawer gets 10 points for each correct guess
+                drawer_points = 10
+                self.update_score(self.drawer_id, drawer_points)
                 
                 # Check if everyone guessed
-                # Total guessers = Players - 1 (drawer)
-                if len(self.guessed_ids) >= len(self.players) - 1:
+                total_guessers = len(self.players) - 1
+                if len(self.guessed_players) >= total_guessers:
+                    # Everyone guessed, end round early
                     self.end_round()
+                    return {
+                        "type": "GUESS_CORRECT", 
+                        "payload": {
+                            "player_id": player_id, 
+                            "points": guesser_points,
+                            "round_complete": True,
+                            "word": self.current_word
+                        }
+                    }
                     
-                return {"type": "GUESS_CORRECT", "payload": {"player_id": player_id, "score": points}}
+                return {
+                    "type": "GUESS_CORRECT", 
+                    "payload": {
+                        "player_id": player_id, 
+                        "points": guesser_points,
+                        "round_complete": False
+                    }
+                }
             else:
-                 return {"type": "GUESS_WRONG", "payload": {"player_id": player_id, "guess": guess}}
+                return {
+                    "type": "GUESS_WRONG", 
+                    "payload": {
+                        "player_id": player_id, 
+                        "guess": guess
+                    }
+                }
                  
+        elif event_type == "ROUND_TIMEOUT":
+            # Round timer expired
+            self.end_round()
+            return {
+                "type": "ROUND_TIMEOUT", 
+                "payload": {
+                    "word": self.current_word
+                }
+            }
+             
         elif event_type == "NEXT_ROUND":
-             # Admin or logic to start next round
-             # For now, maybe auto-start? Or explicit call?
-             # Let's assume explicitly called or triggered by timer
-             self.start_round()
-             return {"type": "ROUND_START", "payload": self.get_state()}
+            self.start_round()
+            return {
+                "type": "ROUND_START", 
+                "payload": self.get_round_state()
+            }
              
         return {}
         
     def end_round(self):
-        # Logic to handle round end (show word, etc)
-        # For simplicity, just start next round immediately or wait?
-        # Ideally, we have a REVEAL phase.
-        # Let's just start next round for MVP or set phase to REVEAL
-        self.start_round()
+        """End the current round and stop timer."""
+        self.stop_timer()
+        self.round_start_time = None
+        self.round_end_time = None
+    
+    def get_round_state(self) -> Dict[str, Any]:
+        """Get the current round state for broadcasting."""
+        return {
+            "round_number": self.round_number,
+            "drawer_id": self.drawer_id,
+            "round_start_time": self.round_start_time,
+            "round_end_time": self.round_end_time,
+            "round_duration": self.round_duration,
+            "guessed_players": list(self.guessed_players.keys()),
+            "scores": self.scores
+        }
 
     def get_state(self) -> Dict[str, Any]:
+        """Get full game state."""
         base_state = super().get_state()
         return {
             **base_state,
             "drawer_id": self.drawer_id,
-            "masked_word": self.masked_word, # Only show masked word to guessers
-            # Note: client needs to handle hiding 'current_word' from guessers
-            # But the backend should ideally not even send it unless it's the drawer
+            "round_number": self.round_number,
+            "round_start_time": self.round_start_time,
+            "round_end_time": self.round_end_time,
             "round_duration": self.round_duration,
-            "canvas_data_count": len(self.canvas_data) # Send full data separately on connect
+            "guessed_players": list(self.guessed_players.keys()),
+            "canvas_data": self.canvas_data
         } 
         
     def get_player_state(self, player_id: str) -> Dict[str, Any]:
         """Get state filtered for specific player."""
         state = self.get_state()
+        
+        # Only send the word to the drawer
         if player_id == self.drawer_id:
             state["word"] = self.current_word
+            state["is_drawer"] = True
         else:
-             state["word"] = self.masked_word
+            state["word"] = self.masked_word
+            state["is_drawer"] = False
+            state["has_guessed"] = player_id in self.guessed_players
+            
         return state
