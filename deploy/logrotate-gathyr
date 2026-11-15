@@ -1,5 +1,6 @@
 # /etc/logrotate.d/gathyr
 /services/Gathyr/deploy/*.log {
+    su ubuntu ubuntu
     weekly
     rotate 8
     maxsize 50M
