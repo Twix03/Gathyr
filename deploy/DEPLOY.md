@@ -17,6 +17,8 @@ ssh ubuntu@oracle
 cd /services/Gathyr && ./deploy/deploy.sh
 ```
 
+Then verify from your machine: `BASE_URL=https://gathyr.app e2e/.venv/bin/python e2e/smoke.py`.
+
 Restarting the API ends all active rooms (state is in memory): people in a call see
 "Your session expired" and have to start a new room. Deploy when rooms are quiet:
 `curl -s localhost:8000/health` shows the room count.

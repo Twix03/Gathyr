@@ -46,6 +46,13 @@ cd Frontend && npm run build                      # typecheck + production build
 ```
 CI runs both on every push and pull request.
 
+End-to-end smoke test (two real Chrome users with fake cameras: call, chat, refresh, every game):
+```bash
+uv venv e2e/.venv && uv pip install --python e2e/.venv/bin/python -r e2e/requirements.txt   # or python -m venv
+e2e/.venv/bin/python e2e/smoke.py                              # local dev stack
+BASE_URL=https://gathyr.app e2e/.venv/bin/python e2e/smoke.py  # production, after deploying
+```
+
 ### Adding a game
 1. `Backend/gathyr/games/<name>.py`: subclass `Game`, decorate with `@register`, import it at the
    bottom of `games/__init__.py`, add tests in `Backend/tests/test_games.py` (use `FakeCtx`).

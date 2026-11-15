@@ -53,3 +53,5 @@ dev/*.log
 dev/.*.pid
 Frontend/.env.development.local
 dev/feedback.jsonl
+e2e/.venv/
+e2e/out/
