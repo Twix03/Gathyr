@@ -1,169 +1,158 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import RoomPage from '../components/RoomPage';
-import { websocketService, useRoomHandlers, useGameHandlers, useProposalHandlers } from '../services/websocket';
-import { apiService } from '../services/api';
-import { Room, Participant } from '../types/Room';
-import { Room as LiveKitRoom, RoomOptions, VideoPresets } from "livekit-client";
-import { config } from '../services/config'
-import { LiveKitRoomContext } from "../services/livekit";
-import { LocalPreferencesProvider } from '../services/LocalPreferencesContext';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import type { Room } from 'livekit-client';
+import { toast } from 'sonner';
+import { api, ApiError } from '../lib/api';
+import { config } from '../lib/config';
+import { getPrefs } from '../lib/prefs';
+import { RealtimeClient } from '../lib/realtime';
+import { RoomStore, RoomStoreContext } from '../lib/roomStore';
+import { clearSession, loadSession, saveSession } from '../lib/session';
+import type { SessionResponse } from '../lib/types';
+import { createMediaRoom, MediaRoomContext } from '../media/livekit';
+import { RoomShell } from '../room/RoomShell';
+import { Button } from '../ui/Button';
+import { Wordmark } from '../ui/Wordmark';
 
-function RoomRoute() {
-  const { roomCode } = useParams();
+interface Joined {
+  store: RoomStore;
+  media: Room;
+  token: string;
+}
+
+export default function RoomRoute() {
+  const { roomCode = '' } = useParams();
+  const code = roomCode.toUpperCase();
   const navigate = useNavigate();
-
-  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
-  const [currentUser, setCurrentUser] = useState<Participant | null>(null);
-  const mediaRoomRef = useRef<LiveKitRoom | null>(null);
-  const lkTokenRef = useRef<string | null>(
-    (window.history.state?.usr?.token as string | undefined) ?? null
-  );
+  const location = useLocation();
+  const [joined, setJoined] = useState<Joined | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!roomCode) {
-      navigate('/');
-      return;
-    }
+    let cancelled = false;
+    let client: RealtimeClient | null = null;
+    let media: Room | null = null;
 
-    // If we already have a user (e.g. from state update after rejoin), connect immediately.
-    if (currentUser) {
-      if (!lkTokenRef.current) {
-        // Shouldn't happen, but bail to landing as a safety net.
-        navigate(`/?room=${roomCode}`);
+    (async () => {
+      let res: SessionResponse | null = (location.state as { session?: SessionResponse } | null)?.session ?? null;
+      if (res && res.room.code !== code) res = null;
+      const saved = loadSession(code);
+
+      if (!res && saved) {
+        try {
+          res = await api.resume(code, saved.token);
+        } catch (e) {
+          const status = (e as ApiError).status;
+          if (status === 401 && saved.name) {
+            // seat expired (away too long) — take a new one with the same name
+            try { res = await api.joinRoom(code, saved.name); } catch { res = null; }
+          } else if (status !== 401 && status !== 404) {
+            if (!cancelled) setError((e as Error).message);
+            return;
+          }
+        }
+      }
+      if (cancelled) return;
+      if (!res) {
+        clearSession();
+        navigate(`/?room=${code}`, { replace: true });
         return;
       }
 
-      if (!mediaRoomRef.current) {
-        const roomOptions: RoomOptions = {
-          videoCaptureDefaults: {
-            resolution: VideoPresets.h720.resolution,
-          },
-          publishDefaults: {
-            videoCodec: "vp9",
-            simulcast: true,
-            screenShareEncoding: {
-              maxBitrate: 3_000_000,
-              maxFramerate: 30,
-              priority: "high",
-            },
-          },
-          adaptiveStream: false,
-          dynacast: true,
-        };
-        mediaRoomRef.current = new LiveKitRoom(roomOptions);
-      }
+      saveSession({ code, token: res.session_token, participantId: res.participant.id, name: res.participant.name });
+      // drop the tokens from history state; a refresh goes through resume()
+      if (location.state) navigate(location.pathname, { replace: true, state: null });
 
-      websocketService.connect(roomCode, currentUser.id);
+      const store = new RoomStore(res.participant.id, res.room);
+      client = new RealtimeClient({
+        url: `${config.wsBaseUrl}/ws/room/${code}`,
+        token: res.session_token,
+        onMessage: store.handle,
+        onStatus: store.setStatus,
+        onFatal: store.setFatal,
+      });
+      store.client = client;
+      client.start();
+      media = createMediaRoom();
+      setJoined({ store, media, token: res.session_token });
 
-      const join = async () => {
-        await mediaRoomRef.current!.connect(config.liveKitUrl, lkTokenRef.current!);
-        const savedMic = localStorage.getItem('gathyr_user_mic') !== 'false';
-        const savedVideo = localStorage.getItem('gathyr_user_video') !== 'false';
-        await mediaRoomRef.current!.localParticipant.setMicrophoneEnabled(savedMic);
-        await mediaRoomRef.current!.localParticipant.setCameraEnabled(savedVideo);
-      };
-
-      join();
-
-      return () => {
-        console.log('cleanup: disconnecting');
-        websocketService.disconnect();
-        mediaRoomRef.current?.disconnect();
-      };
-    }
-
-    // No currentUser — try to auto-rejoin from localStorage (e.g. page refresh).
-    const savedParticipantStr = localStorage.getItem('participant');
-    const savedRoomCode = localStorage.getItem('roomCode');
-
-    if (savedParticipantStr && savedRoomCode?.toUpperCase() === roomCode.toUpperCase()) {
-      let savedParticipant: Participant;
       try {
-        savedParticipant = JSON.parse(savedParticipantStr) as Participant;
+        await media.connect(config.liveKitUrl, res.livekit_token);
       } catch {
-        navigate(`/?room=${roomCode}`);
+        if (!cancelled) toast.error("Couldn't connect to video. Check your connection and refresh.");
         return;
       }
+      if (cancelled) return;
+      const prefs = getPrefs();
+      await media.localParticipant.setMicrophoneEnabled(prefs.micOn).catch(() =>
+        toast.error('Microphone unavailable', { description: 'Allow microphone access in your browser to talk.' }));
+      await media.localParticipant.setCameraEnabled(prefs.cameraOn).catch(() =>
+        toast.error('Camera unavailable', { description: 'Allow camera access in your browser to be seen.' }));
+    })();
 
-      apiService.rejoinRoom(roomCode, savedParticipant.id)
-        .then(({ participant, token }) => {
-          lkTokenRef.current = token;
-          localStorage.setItem('participant', JSON.stringify(participant));
-          setCurrentUser(participant); // triggers effect rerun → connect
-        })
-        .catch(() => navigate(`/?room=${roomCode}`));
-    } else {
-      // No saved session, go to landing so user can enter their name.
-      navigate(`/?room=${roomCode}`);
-    }
-  }, [roomCode, currentUser?.id, navigate]);
+    return () => {
+      cancelled = true;
+      client?.stop();
+      void media?.disconnect();
+      setJoined(null);
+    };
+    // location.state is consumed once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, attempt]);
 
-  // Register room-related handlers
-  useRoomHandlers({
-    setRoom: setCurrentRoom,
-    setUser: setCurrentUser,
-    currentUserId: currentUser?.id || '',
-  });
-
-  // Register game-related handlers
-  useGameHandlers({
-    setRoom: setCurrentRoom,
-    onGameEvent: (event) => {
-      // Game events are handled by individual game components
-      console.log('Game event received in RoomRoute:', event);
-    },
-  });
-
-  // Register proposal-related handlers
-  useProposalHandlers({
-    setRoom: setCurrentRoom,
-  });
-
-  const handleLeaveRoom = async () => {
-    if (currentRoom && currentUser) {
-      websocketService.disconnect();
-      localStorage.removeItem('participant');
-      localStorage.removeItem('participantId');
-      localStorage.removeItem('roomCode');
-      await apiService.leaveRoom(currentRoom.code, currentUser.id);
-    }
+  const leave = () => {
+    if (joined) void api.leave(code, joined.token).catch(() => {});
+    clearSession();
     navigate('/');
   };
 
-  const handleUpdateRoom = useCallback((room: Room) => {
-    setCurrentRoom(room);
-    if (room.currentGame) {
-      websocketService.startGame(room.currentGame);
-    } else {
-      websocketService.endGame();
-    }
-  }, []);
-
-  const handleUpdateUser = useCallback((user: Participant) => {
-    setCurrentUser(user);
-    websocketService.updateParticipant({
-      voice_enabled: user.voiceEnabled,
-      is_speaking: user.isSpeaking,
-      video_enabled: user.videoEnabled,
-    });
-  }, []);
-
-  if (!currentRoom || !currentUser) return null;
+  if (error) {
+    return (
+      <Notice title="Can't open this room" body={error}
+        action={<Button variant="primary" onClick={() => { setError(null); setAttempt((n) => n + 1); }}>Try again</Button>} />
+    );
+  }
+  if (!joined) return <Notice title="Joining…" />;
 
   return (
-    <LiveKitRoomContext.Provider value={mediaRoomRef.current}>
-      <LocalPreferencesProvider>
-        <RoomPage
-          room={currentRoom}
-          currentUser={currentUser}
-          onLeaveRoom={handleLeaveRoom}
-          onUpdateRoom={handleUpdateRoom}
-          onUpdateUser={handleUpdateUser}
-        />
-      </LocalPreferencesProvider>
-    </LiveKitRoomContext.Provider>
+    <RoomStoreContext.Provider value={joined.store}>
+      <MediaRoomContext.Provider value={joined.media}>
+        <FatalGate store={joined.store} onRetry={() => setAttempt((n) => n + 1)} onLeave={() => { clearSession(); navigate('/'); }}>
+          <RoomShell onLeave={leave} />
+        </FatalGate>
+      </MediaRoomContext.Provider>
+    </RoomStoreContext.Provider>
   );
 }
 
-export default RoomRoute;
+function FatalGate({ store, onRetry, onLeave, children }: {
+  store: RoomStore; onRetry: () => void; onLeave: () => void; children: React.ReactNode;
+}) {
+  const fatal = useSyncExternalStore(store.subscribe, () => store.getState().fatal);
+  if (fatal === 'replaced') {
+    return <Notice title="You're in this room in another tab"
+      body="Gathyr only keeps one connection per person."
+      action={<Button variant="primary" onClick={onRetry}>Use this tab instead</Button>} />;
+  }
+  if (fatal === 'kicked') {
+    return <Notice title="You left the room" body="The host removed you, or your session ended."
+      action={<Button variant="primary" onClick={onLeave}>Back to start</Button>} />;
+  }
+  if (fatal === 'invalid') {
+    return <Notice title="Your session expired" body="Rejoin to get back in."
+      action={<Button variant="primary" onClick={onRetry}>Rejoin</Button>} />;
+  }
+  return <>{children}</>;
+}
+
+export function Notice({ title, body, action }: { title: string; body?: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex h-dvh flex-col items-center justify-center gap-4 p-6 text-center">
+      <Wordmark className="mb-6 text-2xl" />
+      <h1 className="font-display text-xl font-semibold">{title}</h1>
+      {body && <p className="max-w-sm text-sm text-muted">{body}</p>}
+      {action}
+    </div>
+  );
+}

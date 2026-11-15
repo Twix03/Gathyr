@@ -51,3 +51,5 @@ suggestions.txt
 feedback.jsonl
 dev/*.log
 dev/.*.pid
+Frontend/.env.development.local
+dev/feedback.jsonl

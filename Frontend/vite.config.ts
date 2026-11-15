@@ -1,27 +1,17 @@
-import { defineConfig } from 'vite'
-import path from 'path'
-import tailwindcss from '@tailwindcss/vite'
-import react from '@vitejs/plugin-react'
-import fs from 'fs'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  // server: {
-  //   host: true,
-  //   https: {
-  //     key: fs.readFileSync(path.resolve(__dirname, 'certificates/192.168.168.146+2-key.pem')),
-  //     cert: fs.readFileSync(path.resolve(__dirname, 'certificates/192.168.168.146+2.pem')),
-  //   }
-  // },
-  plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
-    react(),
-    tailwindcss(),
-  ],
-  resolve: {
-    alias: {
-      // Alias @ to the src directory
-      '@': path.resolve(__dirname, './src'),
+  plugins: [react(), tailwindcss()],
+  build: {
+    target: 'es2022',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // livekit-client is big and changes rarely — cache it separately
+        manualChunks: { livekit: ['livekit-client'], react: ['react', 'react-dom', 'react-router-dom'] },
+      },
     },
   },
-})
+});
