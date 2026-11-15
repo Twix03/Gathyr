@@ -42,3 +42,12 @@ deploy/.tunnel.pid
 # Brain/Artifacts (if you want to keep them local)
 .gemini/
 brain/
+
+# Secrets / local-only (never commit)
+deploy/livekit.yaml
+*.pem
+*.key
+suggestions.txt
+feedback.jsonl
+dev/*.log
+dev/.*.pid

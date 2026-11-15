@@ -144,31 +144,40 @@ async def leave_room(room_code: str, participant_id: str) -> None:
         }
     )
 
-import os
-from datetime import datetime
+import json
+import time
+from collections import defaultdict, deque
+from pathlib import Path
+from fastapi import Request
+from ..config import settings
 from ..models.schemas import FeedbackSubmission
 
+_feedback_hits: dict[str, deque] = defaultdict(deque)
+FEEDBACK_LIMIT = 5          # submissions
+FEEDBACK_WINDOW = 600       # per 10 minutes, per IP
+
+
 @router.post("/suggestions", status_code=status.HTTP_201_CREATED)
-async def submit_suggestion(request: FeedbackSubmission) -> dict:
-    """Submit a bug report or suggestion. Appends to suggestions.txt."""
-    try:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        entry = f"[{timestamp}] TYPE: {request.type.upper()} | ROOM: {request.room_code or 'N/A'} | USER: {request.user_id or 'N/A'}\n"
-        entry += f"TEXT: {request.text}\n"
-        entry += "-" * 50 + "\n"
-        
-        # Append to a file in the project root
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        file_path = os.path.join(project_root, "suggestions.txt")
-        
-        with open(file_path, "a", encoding="utf-8") as f:
-            f.write(entry)
-            
-        return {"status": "success", "message": "Feedback submitted successfully."}
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to submit feedback: {str(e)}"
-        )
+async def submit_suggestion(request: FeedbackSubmission, http: Request) -> dict:
+    """Store a bug report or suggestion as one JSON line, outside the repo."""
+    ip = http.headers.get("cf-connecting-ip") or (http.client.host if http.client else "unknown")
+    now = time.time()
+    hits = _feedback_hits[ip]
+    while hits and now - hits[0] > FEEDBACK_WINDOW:
+        hits.popleft()
+    if len(hits) >= FEEDBACK_LIMIT:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many submissions, try again later.")
+    hits.append(now)
+
+    path = Path(settings.feedback_path).expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+        "type": request.type,
+        "room": request.room_code,
+        "user": request.user_id,
+        "text": request.text,
+    }
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return {"status": "success"}

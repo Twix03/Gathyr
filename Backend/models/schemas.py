@@ -1,5 +1,5 @@
 """Pydantic schemas for request/response validation."""
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Literal
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -95,9 +95,9 @@ class ParticipantUpdate(BaseModel):
 
 class FeedbackSubmission(BaseModel):
     """Feedback submission schema."""
-    type: str = Field(..., description="bug or suggestion")
-    text: str = Field(..., min_length=1)
-    user_id: Optional[str] = None
-    room_code: Optional[str] = None
+    type: Literal["bug", "suggestion"]
+    text: str = Field(..., min_length=1, max_length=2000)
+    user_id: Optional[str] = Field(None, max_length=64)
+    room_code: Optional[str] = Field(None, max_length=10)
 
 
