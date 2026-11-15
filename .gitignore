@@ -55,3 +55,4 @@ Frontend/.env.development.local
 dev/feedback.jsonl
 e2e/.venv/
 e2e/out/
+__pycache__/
