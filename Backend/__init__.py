@@ -1,2 +1,0 @@
-"""Gathyr Backend Package."""
-
