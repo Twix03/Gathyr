@@ -2,6 +2,9 @@
 # Deploy the current branch on the server:  cd /services/Gathyr && ./deploy/deploy.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# node comes from nvm on the server; non-interactive shells don't load it
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
 [ -f deploy/livekit.yaml ] || { echo "deploy/livekit.yaml missing (copy from deploy/livekit.example.yaml)"; exit 1; }
 [ -f Backend/.env ] || { echo "Backend/.env missing"; exit 1; }
