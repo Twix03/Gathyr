@@ -1,14 +1,15 @@
 [Unit]
-Description=Gathyr FastAPI Backend
+Description=Gathyr API (FastAPI)
 After=network.target
 
 [Service]
 Type=simple
 User=ubuntu
 WorkingDirectory=/services/Gathyr/Backend
-ExecStart=/services/Gathyr/Backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --no-access-log
+# Single worker on purpose: room state lives in this process.
+ExecStart=/services/Gathyr/Backend/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --no-access-log --proxy-headers --forwarded-allow-ips 127.0.0.1 --ws-max-size 65536
 Restart=always
-RestartSec=5
+RestartSec=3
 StandardOutput=append:/services/Gathyr/deploy/backend.log
 StandardError=append:/services/Gathyr/deploy/backend.log
 

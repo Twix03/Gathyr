@@ -1,26 +1,40 @@
-## gathyr.app is proxied through Cloudflare (orange cloud, Flexible SSL).
-## Caddy listens on HTTP only — Cloudflare handles HTTPS for visitors.
+# Gathyr blocks of /etc/caddy/Caddyfile (the server's file also hosts other sites —
+# edit these blocks in place, never overwrite the whole file).
+
+## gathyr.app is proxied through Cloudflare (orange cloud, Flexible SSL), so Caddy serves HTTP.
 gathyr.app:80 {
-	# WebSocket passthrough to FastAPI
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), geolocation=()"
+		-Server
+	}
+
 	handle /ws/* {
 		reverse_proxy localhost:8000
 	}
-
-	# API passthrough to FastAPI
 	handle /api/* {
 		reverse_proxy localhost:8000
 	}
+	handle /health {
+		reverse_proxy localhost:8000
+	}
 
-	# Frontend static files — catch-all (must be last)
 	handle {
 		root * /services/Gathyr/Frontend/dist
+		# hashed build assets never change; index.html must always be fresh
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@html not path /assets/*
+		header @html Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
 }
 
-## livekit.gathyr.app is DNS-only (grey cloud) — direct connection.
-## Caddy handles TLS via Let's Encrypt here.
+## livekit.gathyr.app is DNS-only (grey cloud): Caddy terminates TLS for signalling.
 livekit.gathyr.app {
 	reverse_proxy localhost:7880
 }

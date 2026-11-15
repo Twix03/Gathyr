@@ -1,0 +1,11 @@
+# /etc/logrotate.d/gathyr
+/services/Gathyr/deploy/*.log {
+    weekly
+    rotate 8
+    maxsize 50M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
