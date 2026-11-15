@@ -19,7 +19,7 @@ export function Countdown({ deadlineAt, total, className }: {
   const left = useCountdown(deadlineAt);
   if (deadlineAt == null) return null;
   const secs = Math.ceil(left / 1000);
-  const urgent = secs <= 5;
+  const urgent = secs <= 5 && (!total || total >= 10_000);
   return (
     <div className={cn('flex items-center gap-2', className)}>
       {total ? (
